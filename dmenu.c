@@ -6,6 +6,7 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -144,7 +145,7 @@ drawmenu(void)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
 
-	drw_font_getexts(drw->fonts, text, cursor, &curpos, NULL);
+	curpos = TEXTW(text) - TEXTW(&text[cursor]);
 	if ((curpos += lrpad / 2 - 1) < w) {
 		drw_setscheme(drw, scheme[SchemeNorm]);
 		drw_rect(drw, x + curpos, 2, 2, bh - 4, 1, 0);
@@ -288,17 +289,41 @@ nextrune(int inc)
 }
 
 static void
+movewordedge(int dir)
+{
+	if (dir < 0) { /* move cursor to the start of the word*/
+		while (cursor > 0 && strchr(worddelimiters, text[nextrune(-1)]))
+			cursor = nextrune(-1);
+		while (cursor > 0 && !strchr(worddelimiters, text[nextrune(-1)]))
+			cursor = nextrune(-1);
+	} else { /* move cursor to the end of the word */
+		while (text[cursor] && strchr(worddelimiters, text[cursor]))
+			cursor = nextrune(+1);
+		while (text[cursor] && !strchr(worddelimiters, text[cursor]))
+			cursor = nextrune(+1);
+	}
+}
+
+static void
 keypress(XKeyEvent *ev)
 {
 	char buf[32];
 	int len;
-	KeySym ksym = NoSymbol;
+	KeySym ksym;
 	Status status;
 
 	len = XmbLookupString(xic, ev, buf, sizeof buf, &ksym, &status);
-	if (status == XBufferOverflow)
+	switch (status) {
+	default: /* XLookupNone, XBufferOverflow */
 		return;
-	if (ev->state & ControlMask)
+	case XLookupChars:
+		goto insert;
+	case XLookupKeySym:
+	case XLookupBoth:
+		break;
+	}
+
+	if (ev->state & ControlMask) {
 		switch(ksym) {
 		case XK_a: ksym = XK_Home;      break;
 		case XK_b: ksym = XK_Left;      break;
@@ -334,6 +359,12 @@ keypress(XKeyEvent *ev)
 			XConvertSelection(dpy, (ev->state & ShiftMask) ? clip : XA_PRIMARY,
 			                  utf8, utf8, win, CurrentTime);
 			return;
+		case XK_Left:
+			movewordedge(-1);
+			goto draw;
+		case XK_Right:
+			movewordedge(+1);
+			goto draw;
 		case XK_Return:
 		case XK_KP_Enter:
 			break;
@@ -343,8 +374,14 @@ keypress(XKeyEvent *ev)
 		default:
 			return;
 		}
-	else if (ev->state & Mod1Mask)
+	} else if (ev->state & Mod1Mask) {
 		switch(ksym) {
+		case XK_b:
+			movewordedge(-1);
+			goto draw;
+		case XK_f:
+			movewordedge(+1);
+			goto draw;
 		case XK_g: ksym = XK_Home;  break;
 		case XK_G: ksym = XK_End;   break;
 		case XK_h: ksym = XK_Up;    break;
@@ -354,8 +391,11 @@ keypress(XKeyEvent *ev)
 		default:
 			return;
 		}
+	}
+
 	switch(ksym) {
 	default:
+insert:
 		if (!iscntrl(*buf))
 			insert(buf, len);
 		break;
@@ -455,6 +495,8 @@ keypress(XKeyEvent *ev)
 		match();
 		break;
 	}
+
+draw:
 	drawmenu();
 }
 
@@ -467,10 +509,12 @@ paste(void)
 	Atom da;
 
 	/* we have been given the current selection, now insert it into input */
-	XGetWindowProperty(dpy, win, utf8, 0, (sizeof text / 4) + 1, False,
-	                   utf8, &da, &di, &dl, &dl, (unsigned char **)&p);
-	insert(p, (q = strchr(p, '\n')) ? q - p : (ssize_t)strlen(p));
-	XFree(p);
+	if (XGetWindowProperty(dpy, win, utf8, 0, (sizeof text / 4) + 1, False,
+	                   utf8, &da, &di, &dl, &dl, (unsigned char **)&p)
+	    == Success && p) {
+		insert(p, (q = strchr(p, '\n')) ? q - p : (ssize_t)strlen(p));
+		XFree(p);
+	}
 	drawmenu();
 }
 
@@ -509,7 +553,7 @@ run(void)
 	XEvent ev;
 
 	while (!XNextEvent(dpy, &ev)) {
-		if (XFilterEvent(&ev, win))
+		if (XFilterEvent(&ev, None))
 			continue;
 		switch(ev.type) {
 		case Expose:
@@ -539,22 +583,21 @@ run(void)
 static void
 setup(void)
 {
-	int x, y, i = 0;
+	int x, y, i, j;
 	unsigned int du;
 	XSetWindowAttributes swa;
 	XIM xim;
 	Window w, dw, *dws;
 	XWindowAttributes wa;
+	XClassHint ch = {"dmenu", "dmenu"};
 #ifdef XINERAMA
 	XineramaScreenInfo *info;
 	Window pw;
-	int a, j, di, n, area = 0;
+	int a, di, n, area = 0;
 #endif
-
 	/* init appearance */
-	scheme[SchemeNorm] = drw_scm_create(drw, colors[SchemeNorm], 2);
-	scheme[SchemeSel] = drw_scm_create(drw, colors[SchemeSel], 2);
-	scheme[SchemeOut] = drw_scm_create(drw, colors[SchemeOut], 2);
+	for (j = 0; j < SchemeLast; j++)
+		scheme[j] = drw_scm_create(drw, colors[j], 2);
 
 	clip = XInternAtom(dpy, "CLIPBOARD",   False);
 	utf8 = XInternAtom(dpy, "UTF8_STRING", False);
@@ -564,6 +607,7 @@ setup(void)
 	lines = MAX(lines, 0);
 	mh = (lines + 1) * bh;
 #ifdef XINERAMA
+	i = 0;
 	if (parentwin == root && (info = XineramaQueryScreens(dpy, &n))) {
 		XGetInputFocus(dpy, &w, &di);
 		if (mon >= 0 && mon < n)
@@ -613,6 +657,7 @@ setup(void)
 	win = XCreateWindow(dpy, parentwin, x, y, mw, mh, 0,
 	                    CopyFromParent, CopyFromParent, CopyFromParent,
 	                    CWOverrideRedirect | CWBackPixel | CWEventMask, &swa);
+	XSetClassHint(dpy, win, &ch);
 
 	/* open input methods */
 	xim = XOpenIM(dpy, NULL, NULL, NULL);
@@ -620,6 +665,7 @@ setup(void)
 	                XNClientWindow, win, XNFocusWindow, win, NULL);
 
 	XMapRaised(dpy, win);
+	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
 	if (embed) {
 		XSelectInput(dpy, parentwin, FocusChangeMask);
 		if (XQueryTree(dpy, parentwin, &dw, &w, &dws, &du) && dws) {
@@ -685,6 +731,8 @@ main(int argc, char *argv[])
 
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 		fputs("warning: no locale support\n", stderr);
+	if (!XSetLocaleModifiers(""))
+		fputs("warning: no locale modifiers support\n", stderr);
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("cannot open display");
 	screen = DefaultScreen(dpy);
@@ -699,7 +747,12 @@ main(int argc, char *argv[])
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 
-	if (fast) {
+#ifdef __OpenBSD__
+	if (pledge("stdio rpath", NULL) == -1)
+		die("pledge");
+#endif
+
+	if (fast && !isatty(0)) {
 		grabkeyboard();
 		readstdin();
 	} else {
