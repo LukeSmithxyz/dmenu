@@ -864,7 +864,7 @@ setup(void)
 		if ((xim = XOpenIM(dpy, NULL, NULL, NULL)) == NULL) {
 			XSetLocaleModifiers("@im=");
 			if ((xim = XOpenIM(dpy, NULL, NULL, NULL)) == NULL)
-				die("XOpenIM failed. Could not open input device.\n");
+				die("XOpenIM failed: could not open input device");
 		}
 	}
 
