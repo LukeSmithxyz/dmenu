@@ -750,7 +750,7 @@ read_Xresources(void) {
 		if (XrmGetResource(xdb, "dmenu.font", "*", &type, &xval) == True) /* font or font set */
 			fonts[0] = strdup(xval.addr);
 		if (XrmGetResource(xdb, "dmenu.color0", "*", &type, &xval) == True)  /* normal background color */
-			colors[SchemeSel][ColBg] = strdup(xval.addr);
+			colors[SchemeNorm][ColBg] = strdup(xval.addr);
 		if (XrmGetResource(xdb, "dmenu.color7", "*", &type, &xval) == True)  /* normal foreground color */
 			colors[SchemeNorm][ColFg] = strdup(xval.addr);
 		if (XrmGetResource(xdb, "dmenu.color6", "*", &type, &xval) == True)  /* selected background color */
