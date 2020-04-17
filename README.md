@@ -1,11 +1,13 @@
 # Luke's dmenu
 
-This is just my build of dmenu. Nothing special, don't bother starring ;-)
+Extra stuff added to vanilla dmenu:
 
-Only changes are minor config ones: bigger font and different colors.
-
-The only reason this is even on Github is so LARBS can access the build, although this repo serves the additional purpose of using Github's metrics to approximate the number of people who install LARBS every day.
+- reads Xresources (ergo pywal compatible)
+- alpha patch, which importantly allows this build to be embedded in transparent st
+- can view color characters like emoji (libxft-bgra is required for this reason)
 
 ## Installation
+
+You must have `libxft-bgra` installed until the libxft upstream is fixed.
 
 After making any config changes that you want, but `make`, `sudo make install` it.
