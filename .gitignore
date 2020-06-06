@@ -1,0 +1,9 @@
+dmenu
+stest
+drw.o
+dmenu.o
+stest.o
+util.o
+dmenu-4.9.tar.gz
+*.rej
+*.orig
