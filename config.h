@@ -5,7 +5,7 @@ static int topbar = 1;                      /* -b  option; if 0, dmenu appears a
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
 	"monospace:size=10",
-	"NotoColor:pixelsize=8:antialias=true:autohint=true"
+	"NotoColorEmoji:pixelsize=8:antialias=true:autohint=true"
 };
 static const unsigned int bgalpha = 0xe0;
 static const unsigned int fgalpha = OPAQUE;
